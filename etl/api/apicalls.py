@@ -59,7 +59,6 @@ class CoinApi:
             with self.connection.cursor() as cursor:
                 for coin in coins:
                     values = (
-                        # Add the current timestamp
                         time.strftime('%Y-%m-%d %H:%M:%S'),
                         coin["uuid"],
                         coin["symbol"],
