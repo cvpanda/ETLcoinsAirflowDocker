@@ -96,7 +96,6 @@ class CoinApi:
             with self.connection.cursor() as cursor:
                 for row in df.rdd.toLocalIterator():
                     values = (
-                        # Add the current timestamp
                         time.strftime('%Y-%m-%d %H:%M:%S'),
                         row["uuid"],
                         row["symbol"],
