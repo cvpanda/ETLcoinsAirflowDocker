@@ -2,22 +2,48 @@ import json
 import redshift_connector
 import requests
 import time
-from dotenv import dotenv_values
+import os
+from pyspark.sql import SparkSession
+
+driver_path = '/home/nagu89/entrega1_coder/working_dir/spark_drivers/postgresql-42.5.2.jar'
+
+os.environ['PYSPARK_SUBMIT_ARGS'] = f'--driver-class-path {driver_path} --jars {driver_path} pyspark-shell'
+os.environ['SPARK_CLASSPATH'] = driver_path
 
 
 class CoinApi:
     def __init__(self):
-        config = dotenv_values('.env')
-        self.url = config['API_URL']
-        self.querystring = json.loads(config['QUERYSTRING'])
-        self.header = json.loads(config['HEADERS'])
-        self.host = config['REDSHIFT_HOST']
-        self.user = config['REDSHIFT_USER']
-        self.password = config['REDSHIFT_PASS']
-        self.database = config['REDSHIFT_DB']
-        self.schema = config['REDSHIFT_SCHEMA']
-        self.table = "coinrank"
+        self.url = 'https://coinranking1.p.rapidapi.com/coins'
+        self.querystring = json.loads(
+            '{"referenceCurrencyUuid": "yhjMzLPhuIDl", "timePeriod": "24h","tiers[0]": "1", "orderBy": "marketCap", "orderDirection": "desc", "limit": "50", "offset": "0"}')
+        self.header = json.loads(
+            '{"X-RapidAPI-Key": "d872672f37msh61163d694fadb48p14d657jsn2fdad2d69b28","X-RapidAPI-Host": "coinranking1.p.rapidapi.com"}')
+        self.host = 'data-engineer-cluster.cyhh5bfevlmn.us-east-1.redshift.amazonaws.com'
+        self.user = 'nahuelcasagrande_coderhouse'
+        self.password = '8aTQc8TE8b'
+        self.database = 'data-engineer-database'
+        self.schema = 'nahuelcasagrande_coderhouse'
+        self.table = 'coinrank'
         self.connection = None
+
+    def transform_data(self, json_data):
+        coins = json_data["data"]["coins"]
+        rows = [(time.strftime('%Y-%m-%d %H:%M:%S'), coin["uuid"], coin["symbol"], coin["name"], coin["color"],
+                 coin["iconUrl"], coin["marketCap"], coin["price"], coin["listedAt"], coin["tier"], coin["change"], coin["rank"]) for coin in coins]
+
+        spark = SparkSession.builder \
+            .master("local[1]") \
+            .appName("coinRank") \
+            .config("spark.jars", driver_path) \
+            .config("spark.driver.extraClassPath", driver_path) \
+            .getOrCreate()
+        # "spark.driver.extraClassPath",  .config("spark.executor.extraClassPath", driver_path) \
+        df = spark.createDataFrame(rows, ["timestamp", "uuid", "symbol", "name", "color",
+                                   "iconUrl", "marketCap", "price", "listedAt", "tier", "change", "rank"])
+        df.printSchema()
+        df.dropDuplicates()
+        print("delete duplicates from dataframe")
+        return df
 
     def create_table_if_not_exists(self):
         columns = ["uuid", "symbol", "name", "color", "iconUrl",
@@ -48,7 +74,18 @@ class CoinApi:
         if isinstance(json_data, str):
             json_data = json.loads(json_data)
 
-        coins = json_data["data"]["coins"]
+        df = self.transform_data(json_data)
+
+        # backup write con spark
+        # try:
+        #     df.write \
+        #         .format("jdbc") \
+        #         .option("url", f"jdbc:redshift://{self.host}:5439/{self.database}") \
+        #         .option("dbtable", f"{self.schema}.{self.table}") \
+        #         .option("user", self.user) \
+        #         .option("password", self.password) \
+        #         .mode("append") \
+        #         .save()
 
         insert_query = f"""
             INSERT INTO {self.schema}.{self.table} (timestamp, uuid, symbol, name, color, iconUrl, marketCap, price, listedAt, tier, change, rank)
@@ -57,24 +94,24 @@ class CoinApi:
 
         try:
             with self.connection.cursor() as cursor:
-                for coin in coins:
+                for row in df.rdd.toLocalIterator():
                     values = (
                         # Add the current timestamp
                         time.strftime('%Y-%m-%d %H:%M:%S'),
-                        coin["uuid"],
-                        coin["symbol"],
-                        coin["name"],
-                        coin["color"],
-                        coin["iconUrl"],
-                        coin["marketCap"],
-                        coin["price"],
-                        coin["listedAt"],
-                        coin["tier"],
-                        coin["change"],
-                        coin["rank"],
+                        row["uuid"],
+                        row["symbol"],
+                        row["name"],
+                        row["color"],
+                        row["iconUrl"],
+                        row["marketCap"],
+                        row["price"],
+                        row["listedAt"],
+                        row["tier"],
+                        row["change"],
+                        row["rank"]
                     )
                     cursor.execute(insert_query, values)
-            self.connection.commit()
+                self.connection.commit()
         except Exception as e:
             self.connection.rollback()
             raise e

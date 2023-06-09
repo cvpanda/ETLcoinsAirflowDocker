@@ -1,0 +1,42 @@
+# docker-compose.yml
+version: '3'
+
+#http://127.0.0.1:8888/lab?token=0ccba46594b17d9da989a31c7dd6c2a62f36f0c9477d65f6
+# o el url que tire el docker al buildear
+
+#spark-submit archivosldad > NahuelCasagrandelog.log  ver como guardar logs. mostrar esqeuma y que se va haciendo
+services:
+
+  pyspark:
+    image: jupyter/pyspark-notebook:2023-04-24
+    # limit the memory and cpu usage
+    # mem_limit: 512m
+    # mem_reservation: 128M
+    # cpus: 0.5
+    container_name: nahuelcasagrande-pyspark
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./docker_shared_folder/working_dir:/home/nagu89/entrega1_coder/working_dir
+    user: root
+    working_dir: /home/nagu89/entrega1_coder/working_dir
+    env_file:
+      - ./.env
+    environment:
+      NB_USER: coder
+      NB_GID: 1000
+      CHOWN_HOME: 'yes'
+      CHOWN_HOME_OPTS: '-R'
+      SPARK_CLASSPATH: '/home/nagu89/entrega1_coder/working_dir/driver_jdbc/postgresql-42.5.2.jar'
+    networks:
+      sem_7_net:
+        ipv4_address: 172.7.7.1
+
+networks:
+  sem_7_net: # Name of the network
+    ipam: # IP Address Management
+      driver: default
+      config:
+        - subnet: 172.7.7.0/16 # Subnet
+        # 172.7.7.0 is the default subnet for docker
+        # 16 is the number of bits used for the network
