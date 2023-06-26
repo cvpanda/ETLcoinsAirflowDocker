@@ -21,7 +21,7 @@ services:
     user: root
     working_dir: /home/nagu89/entrega1_coder/working_dir
     env_file:
-      - ./.env
+      - .env
     environment:
       NB_USER: coder
       NB_GID: 1000
