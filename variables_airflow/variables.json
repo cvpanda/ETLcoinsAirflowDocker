@@ -1,0 +1,4 @@
+{
+    "driver_class_path": "/tmp/drivers/postgresql-42.5.2.jar",
+    "spark_scripts_dir": "/opt/airflow/scripts"
+}
