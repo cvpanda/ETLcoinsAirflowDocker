@@ -132,6 +132,12 @@ class CoinApi:
             self.url, headers=self.header, params=self.querystring
         )
         json_data = response.json()
+        print(json_data)
+        #Xcom
+        task_instance = XCom.get_current_task_instance()
+        task_instance.xcom_push(key='api_response', value=json.dumps(json_data))
+
+
         return json_data
 
     def get_column_names(self, json_data=None):
