@@ -4,6 +4,9 @@ from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.models import Variable
 from dotenv import dotenv_values
 from datetime import datetime, timedelta
+from airflow.operators.python_operator import PythonOperator
+from airflow.operators.email_operator import EmailOperator
+import json
 
 config = dotenv_values('.env')
 
@@ -20,10 +23,35 @@ QUERY_CREATE_TABLE = f"""
     ) DISTKEY(id) SORTKEY(symbol);
 """
 
+def check_and_send_email(**context):
+    ti = context['ti']
+    api_response = ti.xcom_pull(task_ids='spark_etl_users', key='api_response')
+    print(f'api_response')
+    print(f'{api_response}')
+    print('----------------')
+    json_data = json.loads(api_response)
+    print(f'{json_data}')
+
+    #send_email_alert()
+    for item in json_data:
+        if item['rank'] == '1':
+            send_email_alert()
+
+def send_email_alert():
+    email_content = "Se encontro una coin en el top 1!"
+    email_operator = EmailOperator(
+        task_id='send_email_alert',
+        to='nahuelcasagrande@gmail.com',  #Poner email propio para probar
+        subject='Coin Top 1 del momento',
+        html_content=email_content,
+    )
+    return email_operator
+
+
 
 default_args = {
     'owner': 'nahuelCasa',
-    'start_date': datetime(2023, 7, 10),
+    'start_date': datetime(2023, 7, 28),
     "retries": 0,
     "retry_delay": timedelta(seconds=5),
 }
@@ -51,4 +79,11 @@ with DAG(
         driver_class_path=Variable.get("driver_class_path"),
     )
 
-    create_table >> spark_etl_users
+    check_and_send_email_task = PythonOperator(
+        task_id='check_and_send_email_task',
+        python_callable=check_and_send_email,
+        provide_context=True,
+        dag=dag,
+    )
+
+    create_table >> spark_etl_users >> check_and_send_email_task
