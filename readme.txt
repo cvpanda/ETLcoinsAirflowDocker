@@ -1,3 +1,13 @@
+Project idea:
+Collect information regarding coins and insert it into a redshift database using airflow.
+
+Technologies:
+Airflow
+Docker
+Python
+PySpark
+
+
 completar .env con variables
 
 API_URL = 'https://coinranking1.p.rapidapi.com/coins'
